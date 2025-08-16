@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# Simple configure script to verify build dependencies.
+missing=()
+
+check_cmd() {
+  local cmd=$1 pkg=$2
+  echo -n "Checking for $cmd... "
+  if command -v "$cmd" >/dev/null 2>&1; then
+    echo "found"
+  else
+    echo "missing"
+    missing+=("$pkg")
+  fi
+}
+
+check_lib() {
+  local lib=$1 pkg=$2
+  echo -n "Checking for library $lib... "
+  if pkg-config --exists "$lib" 2>/dev/null; then
+    echo "found"
+  else
+    echo "missing"
+    missing+=("$pkg")
+  fi
+}
+
+check_cmd gcc build-essential
+check_cmd sdl2-config libsdl2-dev
+check_cmd pkg-config pkg-config
+check_lib SDL2_ttf libsdl2-ttf-dev
+check_lib fftw3 libfftw3-dev
+
+if [ ${#missing[@]} -eq 0 ]; then
+  echo "All dependencies met."
+  exit 0
+else
+  echo "Missing dependencies: ${missing[*]}"
+  echo "Install them on Debian/Ubuntu with:"
+  echo "  sudo apt-get install ${missing[*]}"
+  exit 1
+fi
