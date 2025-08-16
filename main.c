@@ -29,6 +29,13 @@ void cdft(int, int, double *, int *, double *);
 #define EVENT_HISTORY_SIZE 50
 #define PATTERN_LENGTH 3
 
+// Layout constants for bottom panel
+#define LEFT_COL_X 10
+#define MIDDLE_COL_X 350
+#define RIGHT_COL_X 750
+#define FOOTER_Y (WATERFALL_HEIGHT + 20)
+#define LINE_SPACING 20
+
 // Audio processing constants
 #define SAMPLE_RATE 44100
 #define FFT_SIZE 4096
@@ -399,42 +406,50 @@ void render(int has_new_data) {
     SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, &(SDL_Rect){0, 0, SCREEN_WIDTH, WATERFALL_HEIGHT});
 
     SDL_SetRenderDrawColor(g_renderer, grid_color.r, grid_color.g, grid_color.b, 255);
-    for (int x = 0; x < SCREEN_WIDTH; x += 50) SDL_RenderDrawLine(g_renderer, x, 0, x, SCREEN_HEIGHT);
-    for (int y = 0; y < SCREEN_HEIGHT; y += 50) SDL_RenderDrawLine(g_renderer, 0, y, SCREEN_WIDTH, y);
+    for (int x = 0; x < SCREEN_WIDTH; x += 50) {
+        SDL_RenderDrawLine(g_renderer, x, 0, x, WATERFALL_HEIGHT);
+    }
+    for (int y = 0; y < WATERFALL_HEIGHT; y += 50) {
+        SDL_RenderDrawLine(g_renderer, 0, y, SCREEN_WIDTH, y);
+    }
+    SDL_RenderDrawLine(g_renderer, 0, WATERFALL_HEIGHT, SCREEN_WIDTH, WATERFALL_HEIGHT);
 
     char buffer[100];
-    int current_y;
 
     // Left Column
-    render_text("STATUS & CONTROLS", 10, WATERFALL_HEIGHT + 20, g_font_medium, highlight_color);
+    int left_y = FOOTER_Y;
+    render_text("STATUS & CONTROLS", LEFT_COL_X, left_y, g_font_medium, highlight_color);
+    left_y += 30;
     sprintf(buffer, "Input Gain: %+.1f dB (Up/Down)", g_input_gain_db);
-    render_text(buffer, 15, WATERFALL_HEIGHT + 50, g_font_small, text_color);
+    render_text(buffer, LEFT_COL_X + 5, left_y, g_font_small, text_color);
+    left_y += LINE_SPACING;
     sprintf(buffer, "Burst Threshold: %+.1f dB (Left/Right)", g_burst_threshold_db);
-    render_text(buffer, 15, WATERFALL_HEIGHT + 70, g_font_small, text_color);
+    render_text(buffer, LEFT_COL_X + 5, left_y, g_font_small, text_color);
+    left_y += LINE_SPACING;
     if (g_burst_state == STATE_BURST) {
-        render_text("STATE: BURST DETECTED", 15, WATERFALL_HEIGHT + 90, g_font_small, highlight_color);
+        render_text("STATE: BURST DETECTED", LEFT_COL_X + 5, left_y, g_font_small, highlight_color);
     } else {
-        render_text("STATE: Monitoring...", 15, WATERFALL_HEIGHT + 90, g_font_small, text_color);
+        render_text("STATE: Monitoring...", LEFT_COL_X + 5, left_y, g_font_small, text_color);
     }
 
     // Middle Column
-    current_y = WATERFALL_HEIGHT + 20;
-    render_text("REAL-TIME ANALYSIS", 350, current_y, g_font_medium, highlight_color);
+    int current_y = FOOTER_Y;
+    render_text("REAL-TIME ANALYSIS", MIDDLE_COL_X, current_y, g_font_medium, highlight_color);
     current_y += 30;
     sprintf(buffer, "Peak Frequency: %.2f Hz", g_peak_freq);
-    render_text(buffer, 355, current_y, g_font_small, text_color);
-    current_y += 20;
+    render_text(buffer, MIDDLE_COL_X + 5, current_y, g_font_small, text_color);
+    current_y += LINE_SPACING;
     sprintf(buffer, "Peak Magnitude: %.2f dB", g_peak_mag);
-    render_text(buffer, 355, current_y, g_font_small, text_color);
+    render_text(buffer, MIDDLE_COL_X + 5, current_y, g_font_small, text_color);
 
-    current_y += 40;
-    render_text("PATTERN ANALYSIS", 350, current_y, g_font_medium, highlight_color);
+    current_y += LINE_SPACING * 2;
+    render_text("PATTERN ANALYSIS", MIDDLE_COL_X, current_y, g_font_medium, highlight_color);
     current_y += 30;
     if (g_pattern_reps > 1) {
         char pattern_str[50] = "PATTERN: [";
         for (int i = 0; i < PATTERN_LENGTH; i++) {
             char event_char[5];
-            sprintf(event_char, "%c%c", 
+            sprintf(event_char, "%c%c",
                 g_detected_pattern[i].type == EVENT_BURST ? 'B' : 'S',
                 g_detected_pattern[i].duration_class == DURATION_SHORT ? 's' : 'L');
             strcat(pattern_str, event_char);
@@ -442,15 +457,15 @@ void render(int has_new_data) {
         }
         strcat(pattern_str, "]");
         sprintf(buffer, "%s (x%d)", pattern_str, g_pattern_reps);
-        render_text(buffer, 355, current_y, g_font_small, highlight_color);
+        render_text(buffer, MIDDLE_COL_X + 5, current_y, g_font_small, highlight_color);
     } else {
-        render_text("Searching for patterns...", 355, current_y, g_font_small, text_color);
+        render_text("Searching for patterns...", MIDDLE_COL_X + 5, current_y, g_font_small, text_color);
     }
 
     // Right Column
-    render_text("EVENT LOG", 750, WATERFALL_HEIGHT + 20, g_font_medium, highlight_color);
+    render_text("EVENT LOG", RIGHT_COL_X, FOOTER_Y, g_font_medium, highlight_color);
     for (int i = 0; i < g_event_log_pos; i++) {
-        render_text(g_event_log[i], 755, WATERFALL_HEIGHT + 50 + (i * 20), g_font_small, text_color);
+        render_text(g_event_log[i], RIGHT_COL_X + 5, FOOTER_Y + 30 + (i * LINE_SPACING), g_font_small, text_color);
     }
 
     SDL_RenderPresent(g_renderer);
