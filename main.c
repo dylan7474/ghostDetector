@@ -24,19 +24,9 @@ void cdft(int, int, double *, int *, double *);
 // --- Constants ---
 #define SCREEN_WIDTH 1024
 #define SCREEN_HEIGHT 768
-#define WATERFALL_HEIGHT 450
 #define MAX_LOG_ENTRIES 10
 #define EVENT_HISTORY_SIZE 50
 #define PATTERN_LENGTH 3
-#define PANEL_TOP (WATERFALL_HEIGHT + 15)
-#define LEFT_COL_X 15
-#define MID_COL_X 355
-#define RIGHT_COL_X 755
-#define MID_SEP_X 340
-#define RIGHT_SEP_X 730
-#define LEFT_COL_WIDTH (MID_SEP_X - LEFT_COL_X - 10)
-#define MID_COL_WIDTH (RIGHT_SEP_X - MID_COL_X - 10)
-#define RIGHT_COL_WIDTH (SCREEN_WIDTH - RIGHT_COL_X - 10)
 
 // Audio processing constants
 #define SAMPLE_RATE 44100
@@ -54,6 +44,21 @@ typedef struct {
     EventDurationClass duration_class;
 } ClassifiedEvent;
 
+typedef struct {
+    int screen_width;
+    int screen_height;
+    int waterfall_height;
+    int panel_top;
+    int left_col_x;
+    int mid_col_x;
+    int right_col_x;
+    int mid_sep_x;
+    int right_sep_x;
+    int left_col_width;
+    int mid_col_width;
+    int right_col_width;
+} Layout;
+
 // --- Globals ---
 SDL_Window* g_window = NULL;
 SDL_Renderer* g_renderer = NULL;
@@ -64,6 +69,8 @@ TTF_Font* g_font_small = NULL;
 // Textures
 SDL_Texture* g_waterfall_texture = NULL;
 SDL_Texture* g_temp_texture = NULL;
+
+Layout g_layout;
 
 // Audio & FFT
 float g_audio_buffer[FFT_SIZE];
@@ -112,6 +119,7 @@ void render_text_clipped(const char* text, int x, int y, int max_width, TTF_Font
 void add_log_entry(const char* entry);
 void add_classified_event(EventType type, float duration);
 void analyze_patterns();
+void compute_layout(int width, int height);
 
 // --- FFT Function Prototypes ---
 void makewt(int nw, int *ip, double *w);
@@ -147,6 +155,7 @@ int init() {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Window or Renderer could not be created!", NULL);
         return 1;
     }
+    compute_layout(SCREEN_WIDTH, SCREEN_HEIGHT);
     SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN);
     g_is_fullscreen = 1;
     SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
@@ -158,8 +167,8 @@ int init() {
         return 1;
     }
 
-    g_waterfall_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, WATERFALL_HEIGHT);
-    g_temp_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, WATERFALL_HEIGHT);
+    g_waterfall_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, g_layout.screen_width, g_layout.waterfall_height);
+    g_temp_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, g_layout.screen_width, g_layout.waterfall_height);
     SDL_SetRenderTarget(g_renderer, g_waterfall_texture);
     SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
     SDL_RenderClear(g_renderer);
@@ -280,6 +289,28 @@ void analyze_patterns() {
 }
 
 
+void compute_layout(int width, int height) {
+    g_layout.screen_width = width;
+    g_layout.screen_height = height;
+
+    g_layout.waterfall_height = (int)(height * 0.5859375); // ~450 when height is 768
+    int margin_y = (int)(height * 0.02);   // ~15
+    int margin_x = (int)(width * 0.015);   // ~15
+    int sep_padding = (int)(width * 0.01); // ~10
+    int right_offset = (int)(width * 0.024); // ~25
+
+    g_layout.panel_top = g_layout.waterfall_height + margin_y;
+    g_layout.mid_sep_x = (int)(width * 0.332); // ~340
+    g_layout.right_sep_x = (int)(width * 0.713); // ~730
+    g_layout.left_col_x = margin_x;
+    g_layout.mid_col_x = g_layout.mid_sep_x + margin_x;
+    g_layout.right_col_x = g_layout.right_sep_x + right_offset;
+    g_layout.left_col_width = g_layout.mid_sep_x - g_layout.left_col_x - sep_padding;
+    g_layout.mid_col_width = g_layout.right_sep_x - g_layout.mid_col_x - sep_padding;
+    g_layout.right_col_width = width - g_layout.right_col_x - sep_padding;
+}
+
+
 void process_fft() {
     cdft(FFT_SIZE * 2, -1, g_fft_buffer, g_fft_ip, g_fft_w);
 
@@ -391,7 +422,7 @@ void add_log_entry(const char* entry) {
             line[len] = remaining[len];
             line[len + 1] = '\0';
             TTF_SizeText(g_font_small, line, &w, NULL);
-            if (w > RIGHT_COL_WIDTH) {
+            if (w > g_layout.right_col_width) {
                 if (last_space >= 0) {
                     line[last_space] = '\0';
                     len = last_space;
@@ -442,11 +473,11 @@ void render(int has_new_data) {
         SDL_SetRenderTarget(g_renderer, g_temp_texture);
         SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, NULL);
         SDL_SetRenderTarget(g_renderer, g_waterfall_texture);
-        SDL_Rect dest = {0, 1, SCREEN_WIDTH, WATERFALL_HEIGHT - 1};
+        SDL_Rect dest = {0, 1, g_layout.screen_width, g_layout.waterfall_height - 1};
         SDL_RenderCopy(g_renderer, g_temp_texture, NULL, &dest);
 
-        for (int i = 0; i < SCREEN_WIDTH; i++) {
-            float freq = MIN_FREQ_TO_DISPLAY + ((float)i / SCREEN_WIDTH) * (MAX_FREQ_TO_DISPLAY - MIN_FREQ_TO_DISPLAY);
+        for (int i = 0; i < g_layout.screen_width; i++) {
+            float freq = MIN_FREQ_TO_DISPLAY + ((float)i / g_layout.screen_width) * (MAX_FREQ_TO_DISPLAY - MIN_FREQ_TO_DISPLAY);
             int bin_index = (int)(freq / ((float)SAMPLE_RATE / FFT_SIZE));
             float val = (g_fft_magnitudes[bin_index] + 80.0f) / 80.0f;
             val = fmaxf(0.0f, fminf(1.0f, val));
@@ -458,48 +489,48 @@ void render(int has_new_data) {
     SDL_SetRenderTarget(g_renderer, NULL);
     SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
     SDL_RenderClear(g_renderer);
-    
-    SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, &(SDL_Rect){0, 0, SCREEN_WIDTH, WATERFALL_HEIGHT});
+
+    SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, &(SDL_Rect){0, 0, g_layout.screen_width, g_layout.waterfall_height});
 
     SDL_SetRenderDrawColor(g_renderer, grid_color.r, grid_color.g, grid_color.b, 255);
-    for (int x = 0; x < SCREEN_WIDTH; x += 50) SDL_RenderDrawLine(g_renderer, x, 0, x, WATERFALL_HEIGHT);
-    for (int y = 0; y < WATERFALL_HEIGHT; y += 50) SDL_RenderDrawLine(g_renderer, 0, y, SCREEN_WIDTH, y);
+    for (int x = 0; x < g_layout.screen_width; x += 50) SDL_RenderDrawLine(g_renderer, x, 0, x, g_layout.waterfall_height);
+    for (int y = 0; y < g_layout.waterfall_height; y += 50) SDL_RenderDrawLine(g_renderer, 0, y, g_layout.screen_width, y);
 
-    SDL_Rect panel = {0, WATERFALL_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT - WATERFALL_HEIGHT};
+    SDL_Rect panel = {0, g_layout.waterfall_height, g_layout.screen_width, g_layout.screen_height - g_layout.waterfall_height};
     SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
     SDL_RenderFillRect(g_renderer, &panel);
     SDL_SetRenderDrawColor(g_renderer, highlight_color.r, highlight_color.g, highlight_color.b, 255);
-    SDL_RenderDrawLine(g_renderer, 0, WATERFALL_HEIGHT, SCREEN_WIDTH, WATERFALL_HEIGHT);
-    SDL_RenderDrawLine(g_renderer, MID_SEP_X, WATERFALL_HEIGHT, MID_SEP_X, SCREEN_HEIGHT);
-    SDL_RenderDrawLine(g_renderer, RIGHT_SEP_X, WATERFALL_HEIGHT, RIGHT_SEP_X, SCREEN_HEIGHT);
+    SDL_RenderDrawLine(g_renderer, 0, g_layout.waterfall_height, g_layout.screen_width, g_layout.waterfall_height);
+    SDL_RenderDrawLine(g_renderer, g_layout.mid_sep_x, g_layout.waterfall_height, g_layout.mid_sep_x, g_layout.screen_height);
+    SDL_RenderDrawLine(g_renderer, g_layout.right_sep_x, g_layout.waterfall_height, g_layout.right_sep_x, g_layout.screen_height);
 
     char buffer[100];
     int current_y;
 
     // Left Column
-    render_text_clipped("STATUS & CONTROLS", LEFT_COL_X - 5, PANEL_TOP, LEFT_COL_WIDTH + 10, g_font_medium, highlight_color);
+    render_text_clipped("STATUS & CONTROLS", g_layout.left_col_x - 5, g_layout.panel_top, g_layout.left_col_width + 10, g_font_medium, highlight_color);
     sprintf(buffer, "Input Gain: %+.1f dB (Up/Down)", g_input_gain_db);
-    render_text_clipped(buffer, LEFT_COL_X, PANEL_TOP + 30, LEFT_COL_WIDTH, g_font_small, text_color);
+    render_text_clipped(buffer, g_layout.left_col_x, g_layout.panel_top + 30, g_layout.left_col_width, g_font_small, text_color);
     sprintf(buffer, "Burst Threshold: %+.1f dB (Left/Right)", g_burst_threshold_db);
-    render_text_clipped(buffer, LEFT_COL_X, PANEL_TOP + 50, LEFT_COL_WIDTH, g_font_small, text_color);
+    render_text_clipped(buffer, g_layout.left_col_x, g_layout.panel_top + 50, g_layout.left_col_width, g_font_small, text_color);
     if (g_burst_state == STATE_BURST) {
-        render_text_clipped("STATE: BURST DETECTED", LEFT_COL_X, PANEL_TOP + 70, LEFT_COL_WIDTH, g_font_small, highlight_color);
+        render_text_clipped("STATE: BURST DETECTED", g_layout.left_col_x, g_layout.panel_top + 70, g_layout.left_col_width, g_font_small, highlight_color);
     } else {
-        render_text_clipped("STATE: Monitoring...", LEFT_COL_X, PANEL_TOP + 70, LEFT_COL_WIDTH, g_font_small, text_color);
+        render_text_clipped("STATE: Monitoring...", g_layout.left_col_x, g_layout.panel_top + 70, g_layout.left_col_width, g_font_small, text_color);
     }
 
     // Middle Column
-    current_y = PANEL_TOP;
-    render_text_clipped("REAL-TIME ANALYSIS", MID_COL_X - 5, current_y, MID_COL_WIDTH + 10, g_font_medium, highlight_color);
+    current_y = g_layout.panel_top;
+    render_text_clipped("REAL-TIME ANALYSIS", g_layout.mid_col_x - 5, current_y, g_layout.mid_col_width + 10, g_font_medium, highlight_color);
     current_y += 30;
     sprintf(buffer, "Peak Frequency: %.2f Hz", g_peak_freq);
-    render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
+    render_text_clipped(buffer, g_layout.mid_col_x, current_y, g_layout.mid_col_width, g_font_small, text_color);
     current_y += 20;
     sprintf(buffer, "Peak Magnitude: %.2f dB", g_peak_mag);
-    render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
+    render_text_clipped(buffer, g_layout.mid_col_x, current_y, g_layout.mid_col_width, g_font_small, text_color);
 
     current_y += 40;
-    render_text_clipped("PATTERN ANALYSIS", MID_COL_X - 5, current_y, MID_COL_WIDTH + 10, g_font_medium, highlight_color);
+    render_text_clipped("PATTERN ANALYSIS", g_layout.mid_col_x - 5, current_y, g_layout.mid_col_width + 10, g_font_medium, highlight_color);
     current_y += 30;
     if (g_pattern_reps > 1) {
         char pattern_str[50] = "PATTERN: [";
@@ -513,15 +544,15 @@ void render(int has_new_data) {
         }
         strcat(pattern_str, "]");
         sprintf(buffer, "%s (x%d)", pattern_str, g_pattern_reps);
-        render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, highlight_color);
+        render_text_clipped(buffer, g_layout.mid_col_x, current_y, g_layout.mid_col_width, g_font_small, highlight_color);
     } else {
-        render_text_clipped("Searching for patterns...", MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
+        render_text_clipped("Searching for patterns...", g_layout.mid_col_x, current_y, g_layout.mid_col_width, g_font_small, text_color);
     }
 
     // Right Column
-    render_text_clipped("EVENT LOG", RIGHT_COL_X - 5, PANEL_TOP, RIGHT_COL_WIDTH + 10, g_font_medium, highlight_color);
+    render_text_clipped("EVENT LOG", g_layout.right_col_x - 5, g_layout.panel_top, g_layout.right_col_width + 10, g_font_medium, highlight_color);
     for (int i = 0; i < g_event_log_pos; i++) {
-        render_text_clipped(g_event_log[i], RIGHT_COL_X, PANEL_TOP + 30 + (i * 20), RIGHT_COL_WIDTH, g_font_small, text_color);
+        render_text_clipped(g_event_log[i], g_layout.right_col_x, g_layout.panel_top + 30 + (i * 20), g_layout.right_col_width, g_font_small, text_color);
     }
 
     SDL_RenderPresent(g_renderer);
