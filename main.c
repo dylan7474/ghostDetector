@@ -70,7 +70,7 @@ float g_audio_buffer[FFT_SIZE];
 double g_fft_buffer[FFT_SIZE * 2];
 double g_fft_magnitudes[FFT_SIZE / 2];
 int g_audio_buffer_pos = 0;
-volatile int g_fft_ready = 0;
+SDL_atomic_t g_fft_ready;
 
 // Analysis & State
 float g_peak_freq = 0.0f;
@@ -202,6 +202,7 @@ int init() {
         return 1;
     }
     g_fft_ip[0] = 0;
+    SDL_AtomicSet(&g_fft_ready, 0);
     g_quiet_start_time = SDL_GetTicks();
     add_log_entry("System online. Monitoring...");
     SDL_PauseAudioDevice(g_audio_device_id, 0);
@@ -234,13 +235,13 @@ void audio_callback(void* userdata, Uint8* stream, int len) {
             g_audio_buffer[g_audio_buffer_pos++] = sample_with_gain / 32768.0f;
         }
         if (g_audio_buffer_pos >= FFT_SIZE) {
-            if (!g_fft_ready) {
+            if (SDL_AtomicGet(&g_fft_ready) == 0) {
                 for (int j = 0; j < FFT_SIZE; j++) {
                     float hann_multiplier = 0.5f * (1.0f - cos(2.0f * M_PI * j / (FFT_SIZE - 1)));
                     g_fft_buffer[j * 2] = g_audio_buffer[j] * hann_multiplier;
                     g_fft_buffer[j * 2 + 1] = 0.0;
                 }
-                g_fft_ready = 1;
+                SDL_AtomicSet(&g_fft_ready, 1);
             }
             int overlap = FFT_SIZE / 2;
             memmove(g_audio_buffer, g_audio_buffer + overlap, (FFT_SIZE - overlap) * sizeof(float));
@@ -358,9 +359,9 @@ void run_main_loop() {
             handle_input(&e, &is_running);
         }
 
-        if (g_fft_ready) {
+        if (SDL_AtomicGet(&g_fft_ready)) {
             process_fft();
-            g_fft_ready = 0;
+            SDL_AtomicSet(&g_fft_ready, 0);
             new_data_available = 1;
         }
 
