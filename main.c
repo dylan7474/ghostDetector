@@ -374,13 +374,48 @@ void handle_input(SDL_Event* e, int* is_running) {
 }
 
 void add_log_entry(const char* entry) {
-    if (g_event_log_pos < MAX_LOG_ENTRIES) {
-        strcpy(g_event_log[g_event_log_pos++], entry);
-    } else {
-        for (int i = 0; i < MAX_LOG_ENTRIES - 1; i++) {
-            strcpy(g_event_log[i], g_event_log[i + 1]);
+    if (!entry || !g_font_small) return;
+
+    char text[256];
+    strncpy(text, entry, sizeof(text) - 1);
+    text[sizeof(text) - 1] = '\0';
+
+    char* remaining = text;
+    while (*remaining) {
+        char line[100];
+        int len = 0;
+        int last_space = -1;
+        int w = 0;
+
+        while (remaining[len] && len < 99) {
+            line[len] = remaining[len];
+            line[len + 1] = '\0';
+            TTF_SizeText(g_font_small, line, &w, NULL);
+            if (w > RIGHT_COL_WIDTH) {
+                if (last_space >= 0) {
+                    line[last_space] = '\0';
+                    len = last_space;
+                } else {
+                    line[len] = '\0';
+                }
+                break;
+            }
+            if (remaining[len] == ' ') last_space = len;
+            len++;
         }
-        strcpy(g_event_log[MAX_LOG_ENTRIES - 1], entry);
+        line[len] = '\0';
+
+        if (g_event_log_pos < MAX_LOG_ENTRIES) {
+            strcpy(g_event_log[g_event_log_pos++], line);
+        } else {
+            for (int i = 0; i < MAX_LOG_ENTRIES - 1; i++) {
+                strcpy(g_event_log[i], g_event_log[i + 1]);
+            }
+            strcpy(g_event_log[MAX_LOG_ENTRIES - 1], line);
+        }
+
+        remaining += len;
+        while (*remaining == ' ') remaining++;
     }
 }
 
