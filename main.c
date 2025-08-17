@@ -94,6 +94,7 @@ int g_pattern_reps = 0;
 // Controls
 float g_input_gain_db = 0.0f;
 float g_burst_threshold_db = -40.0f;
+int g_is_fullscreen = 1;
 
 // FFT work arrays
 int g_fft_ip[FFT_SIZE + 2];
@@ -146,6 +147,8 @@ int init() {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Window or Renderer could not be created!", NULL);
         return 1;
     }
+    SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN);
+    g_is_fullscreen = 1;
     SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
 
     g_font_medium = TTF_OpenFont("font.ttf", 18);
@@ -349,6 +352,19 @@ void handle_input(SDL_Event* e, int* is_running) {
     if (e->type == SDL_QUIT) *is_running = 0;
     if (e->type == SDL_KEYDOWN) {
         switch (e->key.keysym.sym) {
+            case SDLK_ESCAPE:
+                *is_running = 0;
+                break;
+            case SDLK_f:
+            case SDLK_F11:
+                if (g_is_fullscreen) {
+                    SDL_SetWindowFullscreen(g_window, 0);
+                    g_is_fullscreen = 0;
+                } else {
+                    SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN);
+                    g_is_fullscreen = 1;
+                }
+                break;
             case SDLK_UP: g_input_gain_db = fminf(20.0f, g_input_gain_db + 1.0f); break;
             case SDLK_DOWN: g_input_gain_db = fmaxf(-20.0f, g_input_gain_db - 1.0f); break;
             case SDLK_RIGHT: g_burst_threshold_db = fminf(0.0f, g_burst_threshold_db + 1.0f); break;
