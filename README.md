@@ -21,6 +21,9 @@ make -f Makefile.windows
 ## Controls
 - **Up/Down Arrow**: increase or decrease input gain.
 - **Left/Right Arrow**: raise or lower the burst detection threshold.
+- **Space**: pause or resume monitoring.
+- **C**: clear the event log.
+- **F or F11**: toggle fullscreen mode.
 - **Close Window**: exit the program.
 
 ## Roadmap
