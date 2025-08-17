@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
+#include <time.h>
 
 // --- FFT Implementation (by Takuya OOURA, public domain) ---
 void cdft(int, int, double *, int *, double *);
@@ -43,6 +45,8 @@ void cdft(int, int, double *, int *, double *);
 #define FFT_SIZE 4096
 #define MIN_FREQ_TO_DISPLAY 18000
 #define MAX_FREQ_TO_DISPLAY 22000
+#define VOICE_THRESHOLD 0.02f
+#define SILENCE_HANG (SAMPLE_RATE / 2)
 
 // --- Structs and Enums ---
 typedef enum { STATE_QUIET, STATE_BURST } BurstState;
@@ -71,6 +75,12 @@ double g_fft_buffer[FFT_SIZE * 2];
 double g_fft_magnitudes[FFT_SIZE / 2];
 int g_audio_buffer_pos = 0;
 SDL_atomic_t g_fft_ready;
+
+int g_is_recording = 0;
+Uint32 g_silence_counter = 0;
+FILE* g_record_file = NULL;
+unsigned int g_wav_data_size = 0;
+char g_current_filename[64];
 
 // Analysis & State
 float g_peak_freq = 0.0f;
@@ -113,6 +123,9 @@ void render_text_clipped(const char* text, int x, int y, int max_width, TTF_Font
 void add_log_entry(const char* entry);
 void add_classified_event(EventType type, float duration);
 void analyze_patterns();
+void start_recording();
+void stop_recording();
+void write_wav_header(FILE* file, unsigned int data_size);
 
 // --- FFT Function Prototypes ---
 void makewt(int nw, int *ip, double *w);
@@ -211,6 +224,7 @@ int init() {
 }
 
 void cleanup() {
+    stop_recording();
     if (g_audio_device_id != 0) SDL_CloseAudioDevice(g_audio_device_id);
     if (g_font_medium) TTF_CloseFont(g_font_medium);
     if (g_font_small) TTF_CloseFont(g_font_small);
@@ -233,7 +247,27 @@ void audio_callback(void* userdata, Uint8* stream, int len) {
         if (g_audio_buffer_pos < FFT_SIZE) {
             float sample_with_gain = (float)samples[i] * linear_gain;
             sample_with_gain = fmaxf(-32767.0f, fminf(32767.0f, sample_with_gain));
-            g_audio_buffer[g_audio_buffer_pos++] = sample_with_gain / 32768.0f;
+            float normalized = sample_with_gain / 32768.0f;
+
+            if (fabsf(normalized) > VOICE_THRESHOLD) {
+                if (!g_is_recording) {
+                    start_recording();
+                }
+                g_silence_counter = 0;
+            } else if (g_is_recording) {
+                g_silence_counter++;
+                if (g_silence_counter > SILENCE_HANG) {
+                    stop_recording();
+                }
+            }
+
+            if (g_is_recording && g_record_file) {
+                int16_t out = (int16_t)(normalized * 32767);
+                fwrite(&out, sizeof(int16_t), 1, g_record_file);
+                g_wav_data_size += sizeof(int16_t);
+            }
+
+            g_audio_buffer[g_audio_buffer_pos++] = normalized;
         }
         if (g_audio_buffer_pos >= FFT_SIZE) {
             if (SDL_AtomicGet(&g_fft_ready) == 0) {
@@ -249,6 +283,56 @@ void audio_callback(void* userdata, Uint8* stream, int len) {
             g_audio_buffer_pos = FFT_SIZE - overlap;
         }
     }
+}
+
+void start_recording() {
+    time_t t = time(NULL);
+    struct tm* tm_info = localtime(&t);
+    strftime(g_current_filename, sizeof(g_current_filename), "evp_%Y%m%d_%H%M%S.wav", tm_info);
+    g_record_file = fopen(g_current_filename, "wb");
+    if (!g_record_file) {
+        return;
+    }
+    g_is_recording = 1;
+    g_wav_data_size = 0;
+    unsigned char header[44] = {0};
+    fwrite(header, sizeof(header), 1, g_record_file);
+}
+
+void stop_recording() {
+    if (!g_is_recording || !g_record_file) {
+        return;
+    }
+    fseek(g_record_file, 0, SEEK_SET);
+    write_wav_header(g_record_file, g_wav_data_size);
+    fclose(g_record_file);
+    g_record_file = NULL;
+    g_is_recording = 0;
+}
+
+void write_wav_header(FILE* file, unsigned int data_size) {
+    unsigned int sample_rate = SAMPLE_RATE;
+    unsigned short bits_per_sample = 16;
+    unsigned short channels = 1;
+    unsigned int byte_rate = sample_rate * channels * bits_per_sample / 8;
+    unsigned short block_align = channels * bits_per_sample / 8;
+    unsigned int chunk_size = 36 + data_size;
+
+    fwrite("RIFF", 1, 4, file);
+    fwrite(&chunk_size, 4, 1, file);
+    fwrite("WAVE", 1, 4, file);
+    fwrite("fmt ", 1, 4, file);
+    unsigned int subchunk1_size = 16;
+    unsigned short audio_format = 1;
+    fwrite(&subchunk1_size, 4, 1, file);
+    fwrite(&audio_format, 2, 1, file);
+    fwrite(&channels, 2, 1, file);
+    fwrite(&sample_rate, 4, 1, file);
+    fwrite(&byte_rate, 4, 1, file);
+    fwrite(&block_align, 2, 1, file);
+    fwrite(&bits_per_sample, 2, 1, file);
+    fwrite("data", 1, 4, file);
+    fwrite(&data_size, 4, 1, file);
 }
 
 void add_classified_event(EventType type, float duration) {

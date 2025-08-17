@@ -2,6 +2,8 @@
 
 Paranormal Audio Research Console (PARC) is a C/SDL2 application for capturing and analysing ultrasonic audio events. It provides real-time FFT visualisation and pattern logging for paranormal research experiments.
 
+The console now includes basic EVP detection. When audio resembling human speech is detected, the relevant segment is automatically saved as a timestamped WAV file in the working directory for later review.
+
 ## Building
 
 Run the `configure` script to verify required tools and libraries before building.
