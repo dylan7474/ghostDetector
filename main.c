@@ -95,6 +95,7 @@ int g_pattern_reps = 0;
 float g_input_gain_db = 0.0f;
 float g_burst_threshold_db = -40.0f;
 int g_is_fullscreen = 1;
+int g_is_paused = 0;
 
 // FFT work arrays
 int g_fft_ip[FFT_SIZE + 2];
@@ -399,6 +400,21 @@ void handle_input(SDL_Event* e, int* is_running) {
             case SDLK_DOWN: g_input_gain_db = fmaxf(-20.0f, g_input_gain_db - 1.0f); break;
             case SDLK_RIGHT: g_burst_threshold_db = fminf(0.0f, g_burst_threshold_db + 1.0f); break;
             case SDLK_LEFT: g_burst_threshold_db = fmaxf(-80.0f, g_burst_threshold_db - 1.0f); break;
+            case SDLK_SPACE:
+                if (g_is_paused) {
+                    SDL_PauseAudioDevice(g_audio_device_id, 0);
+                    g_is_paused = 0;
+                    add_log_entry("Monitoring resumed.");
+                } else {
+                    SDL_PauseAudioDevice(g_audio_device_id, 1);
+                    g_is_paused = 1;
+                    add_log_entry("Monitoring paused.");
+                }
+                break;
+            case SDLK_c:
+                g_event_log_pos = 0;
+                add_log_entry("Event log cleared.");
+                break;
         }
     }
 }
@@ -568,6 +584,8 @@ void render(int has_new_data) {
     } else {
         render_text_clipped("STATE: Monitoring...", LEFT_COL_X, PANEL_TOP + 70, LEFT_COL_WIDTH, g_font_small, text_color);
     }
+    render_text_clipped("Space: Pause/Resume", LEFT_COL_X, PANEL_TOP + 90, LEFT_COL_WIDTH, g_font_small, text_color);
+    render_text_clipped("C: Clear Event Log", LEFT_COL_X, PANEL_TOP + 110, LEFT_COL_WIDTH, g_font_small, text_color);
 
     // Middle Column
     current_y = PANEL_TOP;
@@ -603,6 +621,9 @@ void render(int has_new_data) {
     render_text_clipped("EVENT LOG", RIGHT_COL_X - 5, PANEL_TOP, RIGHT_COL_WIDTH + 10, g_font_medium, highlight_color);
     for (int i = 0; i < g_event_log_pos; i++) {
         render_text_clipped(g_event_log[i], RIGHT_COL_X, PANEL_TOP + 30 + (i * 20), RIGHT_COL_WIDTH, g_font_small, text_color);
+    }
+    if (g_is_paused) {
+        render_text_clipped("PAUSED", SCREEN_WIDTH / 2 - 40, WATERFALL_HEIGHT / 2 - 10, 80, g_font_medium, highlight_color);
     }
 
     SDL_RenderPresent(g_renderer);
