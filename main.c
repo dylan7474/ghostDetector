@@ -297,6 +297,10 @@ void start_recording() {
     g_wav_data_size = 0;
     unsigned char header[44] = {0};
     fwrite(header, sizeof(header), 1, g_record_file);
+
+    char log[100];
+    snprintf(log, sizeof(log), "Recording EVP: %s", g_current_filename);
+    add_log_entry(log);
 }
 
 void stop_recording() {
@@ -308,6 +312,10 @@ void stop_recording() {
     fclose(g_record_file);
     g_record_file = NULL;
     g_is_recording = 0;
+
+    char log[100];
+    snprintf(log, sizeof(log), "EVP saved: %s", g_current_filename);
+    add_log_entry(log);
 }
 
 void write_wav_header(FILE* file, unsigned int data_size) {
