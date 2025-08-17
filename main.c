@@ -310,7 +310,7 @@ void process_fft() {
         g_burst_start_time = current_time;
         add_classified_event(EVENT_SILENCE, quiet_duration);
         char log[100];
-        sprintf(log, "Silence: %.2fs", quiet_duration);
+        snprintf(log, sizeof(log), "Silence: %.2fs", quiet_duration);
         add_log_entry(log);
     } else if (g_burst_state == STATE_BURST && avg_energy <= g_burst_threshold_db) {
         g_burst_state = STATE_QUIET;
@@ -318,7 +318,7 @@ void process_fft() {
         g_quiet_start_time = current_time;
         add_classified_event(EVENT_BURST, burst_duration);
         char log[100];
-        sprintf(log, ">> BURST: %.2fs @ %.0f Hz", burst_duration, g_peak_freq);
+        snprintf(log, sizeof(log), ">> BURST: %.2fs @ %.0f Hz", burst_duration, g_peak_freq);
         add_log_entry(log);
     }
 }
@@ -478,9 +478,9 @@ void render(int has_new_data) {
 
     // Left Column
     render_text_clipped("STATUS & CONTROLS", LEFT_COL_X - 5, PANEL_TOP, LEFT_COL_WIDTH + 10, g_font_medium, highlight_color);
-    sprintf(buffer, "Input Gain: %+.1f dB (Up/Down)", g_input_gain_db);
+    snprintf(buffer, sizeof(buffer), "Input Gain: %+.1f dB (Up/Down)", g_input_gain_db);
     render_text_clipped(buffer, LEFT_COL_X, PANEL_TOP + 30, LEFT_COL_WIDTH, g_font_small, text_color);
-    sprintf(buffer, "Burst Threshold: %+.1f dB (Left/Right)", g_burst_threshold_db);
+    snprintf(buffer, sizeof(buffer), "Burst Threshold: %+.1f dB (Left/Right)", g_burst_threshold_db);
     render_text_clipped(buffer, LEFT_COL_X, PANEL_TOP + 50, LEFT_COL_WIDTH, g_font_small, text_color);
     if (g_burst_state == STATE_BURST) {
         render_text_clipped("STATE: BURST DETECTED", LEFT_COL_X, PANEL_TOP + 70, LEFT_COL_WIDTH, g_font_small, highlight_color);
@@ -492,10 +492,10 @@ void render(int has_new_data) {
     current_y = PANEL_TOP;
     render_text_clipped("REAL-TIME ANALYSIS", MID_COL_X - 5, current_y, MID_COL_WIDTH + 10, g_font_medium, highlight_color);
     current_y += 30;
-    sprintf(buffer, "Peak Frequency: %.2f Hz", g_peak_freq);
+    snprintf(buffer, sizeof(buffer), "Peak Frequency: %.2f Hz", g_peak_freq);
     render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
     current_y += 20;
-    sprintf(buffer, "Peak Magnitude: %.2f dB", g_peak_mag);
+    snprintf(buffer, sizeof(buffer), "Peak Magnitude: %.2f dB", g_peak_mag);
     render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
 
     current_y += 40;
@@ -505,14 +505,14 @@ void render(int has_new_data) {
         char pattern_str[50] = "PATTERN: [";
         for (int i = 0; i < PATTERN_LENGTH; i++) {
             char event_char[5];
-            sprintf(event_char, "%c%c", 
+            snprintf(event_char, sizeof(event_char), "%c%c",
                 g_detected_pattern[i].type == EVENT_BURST ? 'B' : 'S',
                 g_detected_pattern[i].duration_class == DURATION_SHORT ? 's' : 'L');
             strcat(pattern_str, event_char);
             if (i < PATTERN_LENGTH - 1) strcat(pattern_str, " > ");
         }
         strcat(pattern_str, "]");
-        sprintf(buffer, "%s (x%d)", pattern_str, g_pattern_reps);
+        snprintf(buffer, sizeof(buffer), "%s (x%d)", pattern_str, g_pattern_reps);
         render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, highlight_color);
     } else {
         render_text_clipped("Searching for patterns...", MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
