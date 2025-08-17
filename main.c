@@ -28,6 +28,15 @@ void cdft(int, int, double *, int *, double *);
 #define MAX_LOG_ENTRIES 10
 #define EVENT_HISTORY_SIZE 50
 #define PATTERN_LENGTH 3
+#define PANEL_TOP (WATERFALL_HEIGHT + 15)
+#define LEFT_COL_X 15
+#define MID_COL_X 355
+#define RIGHT_COL_X 755
+#define MID_SEP_X 340
+#define RIGHT_SEP_X 730
+#define LEFT_COL_WIDTH (MID_SEP_X - LEFT_COL_X - 10)
+#define MID_COL_WIDTH (RIGHT_SEP_X - MID_COL_X - 10)
+#define RIGHT_COL_WIDTH (SCREEN_WIDTH - RIGHT_COL_X - 10)
 
 // Audio processing constants
 #define SAMPLE_RATE 44100
@@ -98,7 +107,7 @@ void process_fft();
 void run_main_loop();
 void handle_input(SDL_Event* e, int* is_running);
 void render(int has_new_data);
-void render_text(const char* text, int x, int y, TTF_Font* font, SDL_Color color);
+void render_text_clipped(const char* text, int x, int y, int max_width, TTF_Font* font, SDL_Color color);
 void add_log_entry(const char* entry);
 void add_classified_event(EventType type, float duration);
 void analyze_patterns();
@@ -359,13 +368,16 @@ void add_log_entry(const char* entry) {
     }
 }
 
-void render_text(const char* text, int x, int y, TTF_Font* font, SDL_Color color) {
+void render_text_clipped(const char* text, int x, int y, int max_width, TTF_Font* font, SDL_Color color) {
     if (!text || !font) return;
     SDL_Surface* surface = TTF_RenderText_Blended(font, text, color);
     if (!surface) return;
     SDL_Texture* texture = SDL_CreateTextureFromSurface(g_renderer, surface);
     SDL_Rect dest = {x, y, surface->w, surface->h};
+    SDL_Rect clip = {x, y, max_width, surface->h};
+    SDL_RenderSetClipRect(g_renderer, &clip);
     SDL_RenderCopy(g_renderer, texture, NULL, &dest);
+    SDL_RenderSetClipRect(g_renderer, NULL);
     SDL_DestroyTexture(texture);
     SDL_FreeSurface(surface);
 }
@@ -399,36 +411,44 @@ void render(int has_new_data) {
     SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, &(SDL_Rect){0, 0, SCREEN_WIDTH, WATERFALL_HEIGHT});
 
     SDL_SetRenderDrawColor(g_renderer, grid_color.r, grid_color.g, grid_color.b, 255);
-    for (int x = 0; x < SCREEN_WIDTH; x += 50) SDL_RenderDrawLine(g_renderer, x, 0, x, SCREEN_HEIGHT);
-    for (int y = 0; y < SCREEN_HEIGHT; y += 50) SDL_RenderDrawLine(g_renderer, 0, y, SCREEN_WIDTH, y);
+    for (int x = 0; x < SCREEN_WIDTH; x += 50) SDL_RenderDrawLine(g_renderer, x, 0, x, WATERFALL_HEIGHT);
+    for (int y = 0; y < WATERFALL_HEIGHT; y += 50) SDL_RenderDrawLine(g_renderer, 0, y, SCREEN_WIDTH, y);
+
+    SDL_Rect panel = {0, WATERFALL_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT - WATERFALL_HEIGHT};
+    SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(g_renderer, &panel);
+    SDL_SetRenderDrawColor(g_renderer, highlight_color.r, highlight_color.g, highlight_color.b, 255);
+    SDL_RenderDrawLine(g_renderer, 0, WATERFALL_HEIGHT, SCREEN_WIDTH, WATERFALL_HEIGHT);
+    SDL_RenderDrawLine(g_renderer, MID_SEP_X, WATERFALL_HEIGHT, MID_SEP_X, SCREEN_HEIGHT);
+    SDL_RenderDrawLine(g_renderer, RIGHT_SEP_X, WATERFALL_HEIGHT, RIGHT_SEP_X, SCREEN_HEIGHT);
 
     char buffer[100];
     int current_y;
 
     // Left Column
-    render_text("STATUS & CONTROLS", 10, WATERFALL_HEIGHT + 20, g_font_medium, highlight_color);
+    render_text_clipped("STATUS & CONTROLS", LEFT_COL_X - 5, PANEL_TOP, LEFT_COL_WIDTH + 10, g_font_medium, highlight_color);
     sprintf(buffer, "Input Gain: %+.1f dB (Up/Down)", g_input_gain_db);
-    render_text(buffer, 15, WATERFALL_HEIGHT + 50, g_font_small, text_color);
+    render_text_clipped(buffer, LEFT_COL_X, PANEL_TOP + 30, LEFT_COL_WIDTH, g_font_small, text_color);
     sprintf(buffer, "Burst Threshold: %+.1f dB (Left/Right)", g_burst_threshold_db);
-    render_text(buffer, 15, WATERFALL_HEIGHT + 70, g_font_small, text_color);
+    render_text_clipped(buffer, LEFT_COL_X, PANEL_TOP + 50, LEFT_COL_WIDTH, g_font_small, text_color);
     if (g_burst_state == STATE_BURST) {
-        render_text("STATE: BURST DETECTED", 15, WATERFALL_HEIGHT + 90, g_font_small, highlight_color);
+        render_text_clipped("STATE: BURST DETECTED", LEFT_COL_X, PANEL_TOP + 70, LEFT_COL_WIDTH, g_font_small, highlight_color);
     } else {
-        render_text("STATE: Monitoring...", 15, WATERFALL_HEIGHT + 90, g_font_small, text_color);
+        render_text_clipped("STATE: Monitoring...", LEFT_COL_X, PANEL_TOP + 70, LEFT_COL_WIDTH, g_font_small, text_color);
     }
 
     // Middle Column
-    current_y = WATERFALL_HEIGHT + 20;
-    render_text("REAL-TIME ANALYSIS", 350, current_y, g_font_medium, highlight_color);
+    current_y = PANEL_TOP;
+    render_text_clipped("REAL-TIME ANALYSIS", MID_COL_X - 5, current_y, MID_COL_WIDTH + 10, g_font_medium, highlight_color);
     current_y += 30;
     sprintf(buffer, "Peak Frequency: %.2f Hz", g_peak_freq);
-    render_text(buffer, 355, current_y, g_font_small, text_color);
+    render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
     current_y += 20;
     sprintf(buffer, "Peak Magnitude: %.2f dB", g_peak_mag);
-    render_text(buffer, 355, current_y, g_font_small, text_color);
+    render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
 
     current_y += 40;
-    render_text("PATTERN ANALYSIS", 350, current_y, g_font_medium, highlight_color);
+    render_text_clipped("PATTERN ANALYSIS", MID_COL_X - 5, current_y, MID_COL_WIDTH + 10, g_font_medium, highlight_color);
     current_y += 30;
     if (g_pattern_reps > 1) {
         char pattern_str[50] = "PATTERN: [";
@@ -442,15 +462,15 @@ void render(int has_new_data) {
         }
         strcat(pattern_str, "]");
         sprintf(buffer, "%s (x%d)", pattern_str, g_pattern_reps);
-        render_text(buffer, 355, current_y, g_font_small, highlight_color);
+        render_text_clipped(buffer, MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, highlight_color);
     } else {
-        render_text("Searching for patterns...", 355, current_y, g_font_small, text_color);
+        render_text_clipped("Searching for patterns...", MID_COL_X, current_y, MID_COL_WIDTH, g_font_small, text_color);
     }
 
     // Right Column
-    render_text("EVENT LOG", 750, WATERFALL_HEIGHT + 20, g_font_medium, highlight_color);
+    render_text_clipped("EVENT LOG", RIGHT_COL_X - 5, PANEL_TOP, RIGHT_COL_WIDTH + 10, g_font_medium, highlight_color);
     for (int i = 0; i < g_event_log_pos; i++) {
-        render_text(g_event_log[i], 755, WATERFALL_HEIGHT + 50 + (i * 20), g_font_small, text_color);
+        render_text_clipped(g_event_log[i], RIGHT_COL_X, PANEL_TOP + 30 + (i * 20), RIGHT_COL_WIDTH, g_font_small, text_color);
     }
 
     SDL_RenderPresent(g_renderer);
