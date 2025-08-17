@@ -109,7 +109,10 @@ int g_is_paused = 0;
 
 // FFT work arrays
 int g_fft_ip[FFT_SIZE + 2];
-double g_fft_w[FFT_SIZE * 5 / 4];
+// Ooura's FFT requires a work array of size n*5/4, where n is the value
+// passed to cdft(). We call cdft() with n = FFT_SIZE * 2, so allocate
+// FFT_SIZE * 5 / 2 elements to avoid buffer overruns.
+double g_fft_w[FFT_SIZE * 5 / 2];
 
 // --- Function Prototypes ---
 int init();
