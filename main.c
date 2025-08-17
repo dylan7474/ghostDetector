@@ -147,7 +147,10 @@ int init() {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Window or Renderer could not be created!", NULL);
         return 1;
     }
-    SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN);
+    if (SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN) != 0) {
+        SDL_Log("SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+        return 1;
+    }
     g_is_fullscreen = 1;
     SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
 
@@ -159,11 +162,31 @@ int init() {
     }
 
     g_waterfall_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, WATERFALL_HEIGHT);
+    if (!g_waterfall_texture) {
+        SDL_Log("SDL_CreateTexture failed: %s", SDL_GetError());
+        return 1;
+    }
     g_temp_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, WATERFALL_HEIGHT);
-    SDL_SetRenderTarget(g_renderer, g_waterfall_texture);
-    SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
-    SDL_RenderClear(g_renderer);
-    SDL_SetRenderTarget(g_renderer, NULL);
+    if (!g_temp_texture) {
+        SDL_Log("SDL_CreateTexture failed: %s", SDL_GetError());
+        return 1;
+    }
+    if (SDL_SetRenderTarget(g_renderer, g_waterfall_texture) != 0) {
+        SDL_Log("SDL_SetRenderTarget failed: %s", SDL_GetError());
+        return 1;
+    }
+    if (SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255) != 0) {
+        SDL_Log("SDL_SetRenderDrawColor failed: %s", SDL_GetError());
+        return 1;
+    }
+    if (SDL_RenderClear(g_renderer) != 0) {
+        SDL_Log("SDL_RenderClear failed: %s", SDL_GetError());
+        return 1;
+    }
+    if (SDL_SetRenderTarget(g_renderer, NULL) != 0) {
+        SDL_Log("SDL_SetRenderTarget failed: %s", SDL_GetError());
+        return 1;
+    }
 
     SDL_AudioSpec want, have;
     SDL_zero(want);
@@ -358,11 +381,17 @@ void handle_input(SDL_Event* e, int* is_running) {
             case SDLK_f:
             case SDLK_F11:
                 if (g_is_fullscreen) {
-                    SDL_SetWindowFullscreen(g_window, 0);
-                    g_is_fullscreen = 0;
+                    if (SDL_SetWindowFullscreen(g_window, 0) != 0) {
+                        SDL_Log("SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+                    } else {
+                        g_is_fullscreen = 0;
+                    }
                 } else {
-                    SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN);
-                    g_is_fullscreen = 1;
+                    if (SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN) != 0) {
+                        SDL_Log("SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+                    } else {
+                        g_is_fullscreen = 1;
+                    }
                 }
                 break;
             case SDLK_UP: g_input_gain_db = fminf(20.0f, g_input_gain_db + 1.0f); break;
@@ -424,11 +453,22 @@ void render_text_clipped(const char* text, int x, int y, int max_width, TTF_Font
     SDL_Surface* surface = TTF_RenderText_Blended(font, text, color);
     if (!surface) return;
     SDL_Texture* texture = SDL_CreateTextureFromSurface(g_renderer, surface);
+    if (!texture) {
+        SDL_Log("SDL_CreateTextureFromSurface failed: %s", SDL_GetError());
+        SDL_FreeSurface(surface);
+        return;
+    }
     SDL_Rect dest = {x, y, surface->w, surface->h};
     SDL_Rect clip = {x, y, max_width, surface->h};
-    SDL_RenderSetClipRect(g_renderer, &clip);
-    SDL_RenderCopy(g_renderer, texture, NULL, &dest);
-    SDL_RenderSetClipRect(g_renderer, NULL);
+    if (SDL_RenderSetClipRect(g_renderer, &clip) != 0) {
+        SDL_Log("SDL_RenderSetClipRect failed: %s", SDL_GetError());
+    }
+    if (SDL_RenderCopy(g_renderer, texture, NULL, &dest) != 0) {
+        SDL_Log("SDL_RenderCopy failed: %s", SDL_GetError());
+    }
+    if (SDL_RenderSetClipRect(g_renderer, NULL) != 0) {
+        SDL_Log("SDL_RenderSetClipRect failed: %s", SDL_GetError());
+    }
     SDL_DestroyTexture(texture);
     SDL_FreeSurface(surface);
 }
@@ -439,11 +479,19 @@ void render(int has_new_data) {
     SDL_Color highlight_color = {255, 255, 100, 255};
 
     if (has_new_data) {
-        SDL_SetRenderTarget(g_renderer, g_temp_texture);
-        SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, NULL);
-        SDL_SetRenderTarget(g_renderer, g_waterfall_texture);
+        if (SDL_SetRenderTarget(g_renderer, g_temp_texture) != 0) {
+            SDL_Log("SDL_SetRenderTarget failed: %s", SDL_GetError());
+        }
+        if (SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, NULL) != 0) {
+            SDL_Log("SDL_RenderCopy failed: %s", SDL_GetError());
+        }
+        if (SDL_SetRenderTarget(g_renderer, g_waterfall_texture) != 0) {
+            SDL_Log("SDL_SetRenderTarget failed: %s", SDL_GetError());
+        }
         SDL_Rect dest = {0, 1, SCREEN_WIDTH, WATERFALL_HEIGHT - 1};
-        SDL_RenderCopy(g_renderer, g_temp_texture, NULL, &dest);
+        if (SDL_RenderCopy(g_renderer, g_temp_texture, NULL, &dest) != 0) {
+            SDL_Log("SDL_RenderCopy failed: %s", SDL_GetError());
+        }
 
         for (int i = 0; i < SCREEN_WIDTH; i++) {
             float freq = MIN_FREQ_TO_DISPLAY + ((float)i / SCREEN_WIDTH) * (MAX_FREQ_TO_DISPLAY - MIN_FREQ_TO_DISPLAY);
@@ -451,27 +499,59 @@ void render(int has_new_data) {
             float val = (g_fft_magnitudes[bin_index] + 80.0f) / 80.0f;
             val = fmaxf(0.0f, fminf(1.0f, val));
             SDL_SetRenderDrawColor(g_renderer, (Uint8)(val * 100), (Uint8)(val * 255), (Uint8)(val * 100), 255);
-            SDL_RenderDrawPoint(g_renderer, i, 0);
+            if (SDL_RenderDrawPoint(g_renderer, i, 0) != 0) {
+                SDL_Log("SDL_RenderDrawPoint failed: %s", SDL_GetError());
+            }
         }
     }
 
-    SDL_SetRenderTarget(g_renderer, NULL);
-    SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
-    SDL_RenderClear(g_renderer);
-    
-    SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, &(SDL_Rect){0, 0, SCREEN_WIDTH, WATERFALL_HEIGHT});
+    if (SDL_SetRenderTarget(g_renderer, NULL) != 0) {
+        SDL_Log("SDL_SetRenderTarget failed: %s", SDL_GetError());
+    }
+    if (SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255) != 0) {
+        SDL_Log("SDL_SetRenderDrawColor failed: %s", SDL_GetError());
+    }
+    if (SDL_RenderClear(g_renderer) != 0) {
+        SDL_Log("SDL_RenderClear failed: %s", SDL_GetError());
+    }
 
-    SDL_SetRenderDrawColor(g_renderer, grid_color.r, grid_color.g, grid_color.b, 255);
-    for (int x = 0; x < SCREEN_WIDTH; x += 50) SDL_RenderDrawLine(g_renderer, x, 0, x, WATERFALL_HEIGHT);
-    for (int y = 0; y < WATERFALL_HEIGHT; y += 50) SDL_RenderDrawLine(g_renderer, 0, y, SCREEN_WIDTH, y);
+    if (SDL_RenderCopy(g_renderer, g_waterfall_texture, NULL, &(SDL_Rect){0, 0, SCREEN_WIDTH, WATERFALL_HEIGHT}) != 0) {
+        SDL_Log("SDL_RenderCopy failed: %s", SDL_GetError());
+    }
+
+    if (SDL_SetRenderDrawColor(g_renderer, grid_color.r, grid_color.g, grid_color.b, 255) != 0) {
+        SDL_Log("SDL_SetRenderDrawColor failed: %s", SDL_GetError());
+    }
+    for (int x = 0; x < SCREEN_WIDTH; x += 50) {
+        if (SDL_RenderDrawLine(g_renderer, x, 0, x, WATERFALL_HEIGHT) != 0) {
+            SDL_Log("SDL_RenderDrawLine failed: %s", SDL_GetError());
+        }
+    }
+    for (int y = 0; y < WATERFALL_HEIGHT; y += 50) {
+        if (SDL_RenderDrawLine(g_renderer, 0, y, SCREEN_WIDTH, y) != 0) {
+            SDL_Log("SDL_RenderDrawLine failed: %s", SDL_GetError());
+        }
+    }
 
     SDL_Rect panel = {0, WATERFALL_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT - WATERFALL_HEIGHT};
-    SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
-    SDL_RenderFillRect(g_renderer, &panel);
-    SDL_SetRenderDrawColor(g_renderer, highlight_color.r, highlight_color.g, highlight_color.b, 255);
-    SDL_RenderDrawLine(g_renderer, 0, WATERFALL_HEIGHT, SCREEN_WIDTH, WATERFALL_HEIGHT);
-    SDL_RenderDrawLine(g_renderer, MID_SEP_X, WATERFALL_HEIGHT, MID_SEP_X, SCREEN_HEIGHT);
-    SDL_RenderDrawLine(g_renderer, RIGHT_SEP_X, WATERFALL_HEIGHT, RIGHT_SEP_X, SCREEN_HEIGHT);
+    if (SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255) != 0) {
+        SDL_Log("SDL_SetRenderDrawColor failed: %s", SDL_GetError());
+    }
+    if (SDL_RenderFillRect(g_renderer, &panel) != 0) {
+        SDL_Log("SDL_RenderFillRect failed: %s", SDL_GetError());
+    }
+    if (SDL_SetRenderDrawColor(g_renderer, highlight_color.r, highlight_color.g, highlight_color.b, 255) != 0) {
+        SDL_Log("SDL_SetRenderDrawColor failed: %s", SDL_GetError());
+    }
+    if (SDL_RenderDrawLine(g_renderer, 0, WATERFALL_HEIGHT, SCREEN_WIDTH, WATERFALL_HEIGHT) != 0) {
+        SDL_Log("SDL_RenderDrawLine failed: %s", SDL_GetError());
+    }
+    if (SDL_RenderDrawLine(g_renderer, MID_SEP_X, WATERFALL_HEIGHT, MID_SEP_X, SCREEN_HEIGHT) != 0) {
+        SDL_Log("SDL_RenderDrawLine failed: %s", SDL_GetError());
+    }
+    if (SDL_RenderDrawLine(g_renderer, RIGHT_SEP_X, WATERFALL_HEIGHT, RIGHT_SEP_X, SCREEN_HEIGHT) != 0) {
+        SDL_Log("SDL_RenderDrawLine failed: %s", SDL_GetError());
+    }
 
     char buffer[100];
     int current_y;
