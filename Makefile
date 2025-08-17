@@ -10,7 +10,7 @@ CC = gcc
 TARGET = ghost
 
 # All C source files used in the project.
-SRCS = main.c
+SRCS = main.c audio.c fft.c render.c
 
 # Use sdl2-config to get the compiler flags for SDL2.
 CFLAGS = -Wall -O2 $(shell sdl2-config --cflags)
